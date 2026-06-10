@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Nutrition Tracker</title>
+<meta name="theme-color" content="#0E1116" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Nutrition" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<style>
+:root{
+  --bg:#0E1116; --surface:#161A21; --surfaceHi:#1D232C; --line:#262D38;
+  --text:#EAEEF3; --dim:#8A94A3; --faint:#5A6472;
+  --cal:#E8641E; --pro:#36C5B0; --carb:#F4B740; --fat:#9D8DF1;
+  --water:#3FA9F5;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);
+  min-height:100vh;padding-bottom:env(safe-area-inset-bottom);}
+button{font-family:inherit;}
+button:focus-visible,input:focus-visible{outline:2px solid var(--cal);outline-offset:2px;}
+input::placeholder{color:var(--faint);}
+.wrap{max-width:460px;margin:0 auto;padding:0 18px env(safe-area-inset-bottom);}
+.tabnum{font-variant-numeric:tabular-nums;}
+
+header{display:flex;justify-content:space-between;align-items:flex-end;
+  padding:calc(22px + env(safe-area-inset-top)) 2px 18px;}
+.brand{font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:2.5px;}
+.brandSub{font-size:11px;color:var(--faint);letter-spacing:2px;text-transform:uppercase;margin-top:3px;}
+.hbtns{display:flex;gap:8px;}
+.pill{font-family:var(--mono);font-size:12px;letter-spacing:1px;color:var(--dim);
+  background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;}
+
+.dateRow{display:flex;align-items:center;justify-content:space-between;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:14px;}
+.nav{width:38px;height:38px;border-radius:8px;border:none;background:transparent;color:var(--dim);
+  font-size:24px;line-height:1;cursor:pointer;}
+.nav:disabled{opacity:.25;cursor:default;}
+.dateLabel{font-size:16px;font-weight:600;text-align:center;}
+.dateSub{font-size:11px;color:var(--faint);text-align:center;margin-top:1px;}
+
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 18px 20px;margin-bottom:10px;}
+.heroTop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;flex-wrap:wrap;gap:6px;}
+.heroNum{font-family:var(--mono);font-size:34px;font-weight:700;}
+.heroGoal{font-family:var(--mono);font-size:18px;color:var(--faint);}
+.heroUnit{font-size:13px;color:var(--dim);letter-spacing:1px;}
+.remain{font-family:var(--mono);font-size:12.5px;color:var(--dim);}
+.remain.over{color:var(--cal);}
+
+.track{width:100%;background:var(--surfaceHi);border-radius:99px;overflow:hidden;}
+.fill{height:100%;border-radius:99px;transition:width .45s cubic-bezier(.2,.8,.2,1);}
+
+.macros{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px;}
+.mcell{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 12px 14px;}
+.mlabel{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;font-weight:600;}
+.mval{font-family:var(--mono);font-size:17px;font-weight:700;margin:5px 0 9px;}
+.mgoal{font-size:11px;color:var(--faint);font-weight:400;}
+
+.block{margin-bottom:18px;}
+.blockHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;padding:0 2px;}
+.blockTitle{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--dim);font-weight:600;}
+.colHint{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--faint);}
+.textBtn{font-family:var(--mono);font-size:11px;letter-spacing:1px;color:var(--dim);background:none;border:none;cursor:pointer;padding:4px;}
+
+/* ---- water ---- */
+.waterCard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 16px 18px;}
+.waterTop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:13px;flex-wrap:wrap;gap:6px;}
+.waterNum{font-family:var(--mono);font-size:30px;font-weight:700;}
+.waterNum span{font-size:15px;color:var(--faint);}
+.waterOz{font-family:var(--mono);font-size:12.5px;color:var(--dim);}
+.waterOz.met{color:var(--water);}
+.bottles{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px;}
+.bottle{width:26px;height:38px;border-radius:5px 5px 7px 7px;position:relative;
+  border:1.5px solid var(--line);background:var(--surfaceHi);overflow:hidden;flex:0 0 auto;}
+.bottle::before{content:"";position:absolute;top:-5px;left:50%;transform:translateX(-50%);
+  width:11px;height:6px;border-radius:2px;background:var(--line);}
+.bottle.on{border-color:var(--water);}
+.bottle.on::after{content:"";position:absolute;inset:0;background:var(--water);opacity:.85;}
+.bottle.on::before{background:var(--water);}
+.waterBtns{display:flex;gap:10px;margin-top:14px;}
+.waterBtn{flex:1;border:1px solid var(--line);background:var(--surfaceHi);color:var(--text);
+  border-radius:11px;padding:13px;font-size:20px;font-weight:700;cursor:pointer;line-height:1;}
+.waterBtn.add{background:var(--water);border-color:var(--water);color:#06223A;}
+.waterBtn:disabled{opacity:.3;cursor:default;}
+
+.scanBtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:linear-gradient(180deg,#20262F,#171C24);border:1px solid var(--line);border-radius:14px;
+  padding:16px;color:var(--text);font-size:15px;font-weight:600;cursor:pointer;margin-bottom:18px;}
+.scanBtn .ic{font-size:19px;}
+.scanBtn .sub{display:block;font-size:11px;font-weight:400;color:var(--dim);margin-top:2px;letter-spacing:.3px;}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;}
+.chipWrap{position:relative;}
+.chip{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:9px 12px;cursor:pointer;color:var(--text);}
+.chip:disabled{cursor:default;}
+.chipName{font-size:13px;font-weight:500;}
+.chipCal{font-family:var(--mono);font-size:11px;color:var(--cal);}
+.chipDel{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:99px;border:none;
+  background:#3A2020;color:#FF8A8A;font-size:10px;cursor:pointer;line-height:1;}
+.chipAdd{background:transparent;border:1px dashed var(--line);border-radius:10px;padding:9px 12px;
+  color:var(--dim);font-size:13px;cursor:pointer;font-family:var(--mono);letter-spacing:.5px;}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:22px 18px;
+  color:var(--faint);font-size:13px;text-align:center;line-height:1.5;}
+
+.ledger{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+.row{display:grid;grid-template-columns:46px 1fr auto 64px 22px;align-items:center;gap:8px;
+  padding:11px 12px;border-bottom:1px solid var(--line);}
+.totalRow{display:grid;grid-template-columns:46px 1fr auto 64px 22px;align-items:center;gap:8px;
+  padding:12px;background:var(--surfaceHi);}
+.rTime{font-family:var(--mono);font-size:10.5px;color:var(--faint);}
+.rName{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rCal{font-family:var(--mono);font-size:13px;font-weight:600;text-align:right;}
+.rMac{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;}
+.rDel{width:22px;height:22px;border-radius:6px;border:none;background:transparent;color:var(--faint);font-size:11px;cursor:pointer;}
+
+.footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.5px;margin:8px 0 28px;}
+
+.overlay{position:fixed;inset:0;background:rgba(6,8,11,.72);display:flex;align-items:flex-end;
+  justify-content:center;z-index:50;backdrop-filter:blur(2px);}
+.sheet{width:100%;max-width:460px;background:var(--surface);border-top:2px solid var(--cal);
+  border-radius:18px 18px 0 0;padding:20px 18px calc(22px + env(safe-area-inset-bottom));
+  animation:up .26s cubic-bezier(.2,.8,.2,1);}
+@keyframes up{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+.sheetHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.sheetTitle{font-family:var(--mono);font-size:14px;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;}
+.close{width:30px;height:30px;border-radius:8px;border:none;background:var(--surfaceHi);color:var(--dim);font-size:12px;cursor:pointer;}
+
+.banner{display:flex;gap:9px;align-items:flex-start;background:var(--surfaceHi);border:1px solid var(--line);
+  border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--dim);line-height:1.45;}
+.banner b{color:var(--text);font-weight:600;}
+
+.field{display:block;margin-bottom:12px;}
+.fieldLabel{display:block;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;color:var(--dim);
+  margin-bottom:6px;text-transform:uppercase;}
+.iwrap{position:relative;display:flex;align-items:center;}
+input.in{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;
+  color:var(--text);font-size:16px;font-family:var(--mono);font-variant-numeric:tabular-nums;outline:none;}
+input.in.text{font-family:var(--sans);}
+.iunit{position:absolute;right:12px;font-family:var(--mono);font-size:11px;color:var(--faint);pointer-events:none;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;}
+
+.checkRow{display:flex;align-items:center;gap:10px;background:none;border:none;color:var(--dim);
+  font-size:13px;cursor:pointer;padding:4px 2px;margin-bottom:16px;}
+.cbox{width:20px;height:20px;border-radius:6px;border:1px solid var(--line);display:flex;
+  align-items:center;justify-content:center;font-size:11px;background:var(--bg);}
+.cbox.on{background:var(--cal);border-color:var(--cal);color:var(--bg);font-weight:700;}
+
+.primary{width:100%;background:var(--cal);color:#1A0E06;border:none;border-radius:12px;padding:15px;
+  font-size:15px;font-weight:700;letter-spacing:.5px;cursor:pointer;}
+.primary:disabled{opacity:.4;cursor:default;}
+.ghost{width:100%;background:transparent;color:var(--dim);border:1px solid var(--line);border-radius:12px;
+  padding:13px;font-size:14px;cursor:pointer;margin-top:10px;}
+
+.spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--cal);border-radius:50%;
+  animation:rot .8s linear infinite;margin:6px auto 14px;}
+@keyframes rot{to{transform:rotate(360deg)}}
+.center{text-align:center;}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:#2A1410;border:1px solid var(--cal);color:#FFD9C2;font-size:13px;padding:11px 16px;border-radius:10px;
+  z-index:80;max-width:90%;text-align:center;}
+.hint{font-size:12px;color:var(--faint);line-height:1.5;margin-top:4px;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<input id="cam" type="file" accept="image/*" capture="environment" style="display:none" />
+<script>
+/* ============================ state ============================ */
+const DEFAULT_GOALS = { calories:2800, protein:180, carbs:350, fat:80, water:4 };
+const BOTTLE_OZ = 34;                       // size of one water bottle
+const SEED_FOODS = [
+  { id:"f_shake", name:"Protein Shake",    calories:200, protein:38, carbs:8, fat:1 },
+  { id:"f_oikos", name:"Oikos Pro Vanilla",calories:130, protein:20, carbs:6, fat:3 },
+];
+
+let date = new Date();
+let entries = [];
+let goals = {...DEFAULT_GOALS};
+let foods = [...SEED_FOODS];
+let editFoods = false;
+let water = 0;                              // bottles drunk today
+
+/* ====================== storage (guarded) ====================== */
+const mem = {};
+function store(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); } catch(e){ mem[key] = val; } }
+function load(key, fb){
+  try{ const v = localStorage.getItem(key); return v===null ? (key in mem ? mem[key] : fb) : JSON.parse(v); }
+  catch(e){ return key in mem ? mem[key] : fb; }
+}
+const apiKey = () => { try{ return localStorage.getItem("ml_apikey")||""; }catch(e){ return mem.ml_apikey||""; } };
+const setApiKey = (k) => { try{ localStorage.setItem("ml_apikey",k); }catch(e){ mem.ml_apikey=k; } };
+
+/* ========================= helpers ============================= */
+const pad = (x)=>String(x).padStart(2,"0");
+const dayStr = (d)=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const logKey   = (d)=>`ml_log_${dayStr(d)}`;
+const waterKey = (d)=>`ml_water_${dayStr(d)}`;
+const labelOf = (d)=>{
+  const t=new Date();t.setHours(0,0,0,0);
+  const c=new Date(d);c.setHours(0,0,0,0);
+  const diff=Math.round((c-t)/864e5);
+  if(diff===0)return"Today"; if(diff===-1)return"Yesterday"; if(diff===1)return"Tomorrow";
+  return d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});};
+const subLabel = (d)=>d.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+const nowTime = ()=>new Date().toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
+const uid = ()=>Math.random().toString(36).slice(2,9);
+const num = (v)=>{const x=parseFloat(v);return isNaN(x)?0:x;};
+const fmt = (v)=>Math.round(v).toLocaleString();
+const isToday = ()=>labelOf(date)==="Today";
+
+/* ========================= persistence ========================= */
+function loadDay(){
+  entries  = load(logKey(date), []);
+  water    = load(waterKey(date), 0);
+}
+function saveEntries(){ store(logKey(date), entries); }
+function saveWater(){ store(waterKey(date), water); }
+function saveFoods(){ store("ml_foods", foods); }
+function saveGoals(){ store("ml_goals", goals); }
+
+/* ========================= rendering =========================== */
+const app = document.getElementById("app");
+
+function barFill(value, goal, color){
+  const pct = goal>0 ? Math.min(100,(value/goal)*100) : 0;
+  const over = goal>0 && value>goal;
+  const bg = over
+    ? `repeating-linear-gradient(45deg,${color},${color} 6px,${color}AA 6px,${color}AA 12px)`
+    : color;
+  return `<div class="fill" style="width:${pct}%;background:${bg}"></div>`;
+}
+function totals(){
+  return entries.reduce((a,e)=>({
+    calories:a.calories+num(e.calories),
+    protein:a.protein+num(e.protein),
+    carbs:a.carbs+num(e.carbs),
+    fat:a.fat+num(e.fat)
+  }),{calories:0,protein:0,carbs:0,fat:0});
+}
+function remainHTML(consumed, goal){
+  const left = goal - consumed;
+  return left>=0
+    ? `<span class="remain">${fmt(left)} kcal left</span>`
+    : `<span class="remain over">${fmt(Math.abs(left))} kcal over</span>`;
+}
+function macroCell(label,v,g,varName){
+  return `<div class="mcell">
+    <div class="mlabel" style="color:var(${varName})">${label}</div>
+    <div class="mval tabnum">${Math.round(v)}<span class="mgoal">/${g}g</span></div>
+    <div class="track" style="height:6px">${barFill(v,g,`var(${varName})`)}</div>
+  </div>`;
+}
+
+/* water section */
+function waterSection(){
+  const goalBottles = Math.max(0, Math.round(num(goals.water)));
+  const oz = water*BOTTLE_OZ, goalOz = goalBottles*BOTTLE_OZ;
+  const met = goalBottles>0 && water>=goalBottles;
+  const slots = Math.max(goalBottles, water);
+  let dots="";
+  for(let i=0;i<slots;i++) dots += `<div class="bottle ${i<water?"on":""}"></div>`;
+  if(slots===0) dots = `<div class="bottle"></div>`;
+  return `<section class="block">
+    <div class="blockHead">
+      <span class="blockTitle">WATER</span>
+      <span class="colHint">${BOTTLE_OZ} oz bottle</span>
+    </div>
+    <div class="waterCard">
+      <div class="waterTop">
+        <div class="waterNum tabnum">${water}<span> / ${goalBottles} bottles</span></div>
+        <span class="waterOz tabnum ${met?"met":""}">${fmt(oz)} / ${fmt(goalOz)} oz${met?" ✓":""}</span>
+      </div>
+      <div class="track" style="height:9px">${barFill(water, goalBottles, "var(--water)")}</div>
+      <div class="bottles">${dots}</div>
+      <div class="waterBtns">
+        <button class="waterBtn" id="waterMinus" ${water<=0?"disabled":""} aria-label="Remove bottle">−</button>
+        <button class="waterBtn add" id="waterPlus" aria-label="Add bottle">+</button>
+      </div>
+    </div>
+  </section>`;
+}
+
+function render(){
+  const t = totals();
+  const chips = foods.map(f=>`
+    <div class="chipWrap">
+      <button class="chip" data-log="${f.id}" ${editFoods?"disabled":""} title="${f.calories} kcal · ${f.protein}P ${f.carbs}C ${f.fat}F">
+        <span class="chipName">${escapeHtml(f.name)}</span><span class="chipCal tabnum">${f.calories}</span>
+      </button>
+      ${editFoods?`<button class="chipDel" data-delfood="${f.id}" aria-label="Delete">✕</button>`:""}
+    </div>`).join("");
+
+  const ledger = entries.length===0
+    ? `<div class="empty">No entries yet. Scan a label, tap a food, or add one to start the day's ledger.</div>`
+    : `<div class="ledger">
+        ${entries.map(e=>`
+          <div class="row">
+            <span class="rTime">${e.time||""}</span>
+            <span class="rName">${escapeHtml(e.name)}</span>
+            <span class="rCal tabnum">${fmt(num(e.calories))}</span>
+            <span class="rMac tabnum">${Math.round(num(e.protein))} ${Math.round(num(e.carbs))} ${Math.round(num(e.fat))}</span>
+            <button class="rDel" data-del="${e.id}" aria-label="Remove">✕</button>
+          </div>`).join("")}
+        <div class="totalRow">
+          <span class="rTime"></span>
+          <span class="rName" style="color:var(--dim);letter-spacing:1px">TOTAL</span>
+          <span class="rCal tabnum" style="color:var(--cal)">${fmt(t.calories)}</span>
+          <span class="rMac tabnum" style="color:var(--text)">${Math.round(t.protein)} ${Math.round(t.carbs)} ${Math.round(t.fat)}</span>
+          <span style="width:22px"></span>
+        </div>
+      </div>`;
+
+  app.innerHTML = `
+    <header>
+      <div><div class="brand">NUTRITION TRACKER</div><div class="brandSub">daily intake</div></div>
+      <div class="hbtns">
+        <button class="pill" id="goalsBtn">goals</button>
+        <button class="pill" id="setBtn">⚙</button>
+      </div>
+    </header>
+
+    <div class="dateRow">
+      <button class="nav" id="prev" aria-label="Previous day">‹</button>
+      <div><div class="dateLabel">${labelOf(date)}</div><div class="dateSub">${subLabel(date)}</div></div>
+      <button class="nav" id="next" aria-label="Next day" ${isToday()?"disabled":""}>›</button>
+    </div>
+
+    <section class="hero">
+      <div class="heroTop">
+        <div><span class="heroNum tabnum">${fmt(t.calories)}</span><span class="heroGoal tabnum"> / ${fmt(goals.calories)}</span><span class="heroUnit"> kcal</span></div>
+        ${remainHTML(t.calories, goals.calories)}
+      </div>
+      <div class="track" style="height:10px">${barFill(t.calories, goals.calories, "var(--cal)")}</div>
+    </section>
+
+    <section class="macros">
+      ${macroCell("PROTEIN",t.protein,goals.protein,"--pro")}
+      ${macroCell("CARBS",t.carbs,goals.carbs,"--carb")}
+      ${macroCell("FAT",t.fat,goals.fat,"--fat")}
+    </section>
+
+    ${waterSection()}
+
+    <button class="scanBtn" id="scanBtn">
+      <span class="ic">📷</span>
+      <span>Scan food<span class="sub">${apiKey()?"AI vision · label or plate":"Point at a nutrition label"}</span></span>
+    </button>
+
+    <section class="block">
+      <div class="blockHead">
+        <span class="blockTitle">QUICK ADD</span>
+        ${foods.length?`<button class="textBtn" id="editBtn">${editFoods?"done":"edit"}</button>`:""}
+      </div>
+      <div class="chips">${chips}<button class="chipAdd" id="addBtn">+ food</button></div>
+    </section>
+
+    <section class="block">
+      <div class="blockHead">
+        <span class="blockTitle">${isToday()?"TODAY'S LOG":"LOG"}</span>
+        <span class="colHint">kcal · P C F</span>
+      </div>
+      ${ledger}
+    </section>
+
+    <div class="footer">data saved on this device · ${foods.length} saved foods</div>
+  `;
+  wire();
+}
+
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+/* ========================= events ============================== */
+function wire(){
+  document.getElementById("prev").onclick = ()=>{ const d=new Date(date);d.setDate(d.getDate()-1);date=d;loadDay();render(); };
+  const nx=document.getElementById("next");
+  if(!isToday()) nx.onclick=()=>{ const d=new Date(date);d.setDate(d.getDate()+1);date=d;loadDay();render(); };
+
+  document.getElementById("goalsBtn").onclick = openGoals;
+  document.getElementById("setBtn").onclick   = openSettings;
+  document.getElementById("addBtn").onclick   = ()=>openAdd(null,null);
+  document.getElementById("scanBtn").onclick  = ()=>document.getElementById("cam").click();
+
+  const eb=document.getElementById("editBtn");
+  if(eb) eb.onclick=()=>{ editFoods=!editFoods; render(); };
+
+  /* water */
+  document.getElementById("waterPlus").onclick  = ()=>{ water+=1; saveWater(); render(); };
+  document.getElementById("waterMinus").onclick = ()=>{ if(water>0){ water-=1; saveWater(); render(); } };
+
+  app.querySelectorAll("[data-log]").forEach(b=>b.onclick=()=>{
+    const f=foods.find(x=>x.id===b.dataset.log); if(!f)return;
+    entries=[...entries,{...f,id:uid(),time:nowTime()}]; saveEntries(); render();
+  });
+  app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    entries=entries.filter(e=>e.id!==b.dataset.del); saveEntries(); render();
+  });
+  app.querySelectorAll("[data-delfood]").forEach(b=>b.onclick=()=>{
+    foods=foods.filter(f=>f.id!==b.dataset.delfood); saveFoods();
+    if(!foods.length)editFoods=false; render();
+  });
+}
+
+/* ========================= sheets ============================== */
+function sheet(title, inner){
+  const ov=document.createElement("div"); ov.className="overlay";
+  ov.innerHTML=`<div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheetHead"><span class="sheetTitle">${title}</span>
+    <button class="close" aria-label="Close">✕</button></div>${inner}</div>`;
+  ov.onclick=(e)=>{ if(e.target===ov) close(); };
+  ov.querySelector(".close").onclick=close;
+  document.body.appendChild(ov);
+  function close(){ ov.remove(); }
+  return { el:ov, close };
+}
+
+function foodForm(pre){
+  pre = pre||{};
+  return `
+  <label class="field"><span class="fieldLabel">Food</span>
+    <div class="iwrap"><input class="in text" id="fName" placeholder="name" value="${pre.name?escapeHtml(pre.name):""}" autofocus></div></label>
+  <label class="field"><span class="fieldLabel">Calories</span>
+    <div class="iwrap"><input class="in tabnum" id="fCal" inputmode="decimal" placeholder="0" value="${pre.calories??""}"><span class="iunit">kcal</span></div></label>
+  <div class="grid3">
+    <label class="field"><span class="fieldLabel">Protein</span>
+      <div class="iwrap"><input class="in tabnum" id="fP" inputmode="decimal" placeholder="0" value="${pre.protein??""}"><span class="iunit">g</span></div></label>
+    <label class="field"><span class="fieldLabel">Carbs</span>
+      <div class="iwrap"><input class="in tabnum" id="fC" inputmode="decimal" placeholder="0" value="${pre.carbs??""}"><span class="iunit">g</span></div></label>
+    <label class="field"><span class="fieldLabel">Fat</span>
+      <div class="iwrap"><input class="in tabnum" id="fF" inputmode="decimal" placeholder="0" value="${pre.fat??""}"><span class="iunit">g</span></div></label>
+  </div>`;
+}
+
+function openAdd(pre, banner){
+  const inner = `${banner||""}${foodForm(pre)}
+    <button class="checkRow" id="saveChk"><span class="cbox" id="cbox"></span>Save to Quick Add for next time</button>
+    <button class="primary" id="logIt">Log it</button>`;
+  const s = sheet("Add food", inner);
+  let save=false; const cbox=s.el.querySelector("#cbox");
+  s.el.querySelector("#saveChk").onclick=()=>{ save=!save; cbox.classList.toggle("on",save); cbox.textContent=save?"✓":""; };
+  s.el.querySelector("#logIt").onclick=()=>{
+    const name=s.el.querySelector("#fName").value.trim();
+    if(!name){ toast("Add a name first"); return; }
+    const food={
+      name,
+      calories:num(s.el.querySelector("#fCal").value),
+      protein:num(s.el.querySelector("#fP").value),
+      carbs:num(s.el.querySelector("#fC").value),
+      fat:num(s.el.querySelector("#fF").value)
+    };
+    entries=[...entries,{...food,id:uid(),time:nowTime()}]; saveEntries();
+    if(save){ foods=[...foods,{...food,id:"f_"+uid()}]; saveFoods(); }
+    s.close(); render();
+  };
+}
+
+function openGoals(){
+  const inner = `
+    <label class="field"><span class="fieldLabel">Calories</span>
+      <div class="iwrap"><input class="in tabnum" id="gCal" inputmode="decimal" value="${goals.calories}" autofocus><span class="iunit">kcal</span></div></label>
+    <div class="grid3">
+      <label class="field"><span class="fieldLabel">Protein</span><div class="iwrap"><input class="in tabnum" id="gP" inputmode="decimal" value="${goals.protein}"><span class="iunit">g</span></div></label>
+      <label class="field"><span class="fieldLabel">Carbs</span><div class="iwrap"><input class="in tabnum" id="gC" inputmode="decimal" value="${goals.carbs}"><span class="iunit">g</span></div></label>
+      <label class="field"><span class="fieldLabel">Fat</span><div class="iwrap"><input class="in tabnum" id="gF" inputmode="decimal" value="${goals.fat}"><span class="iunit">g</span></div></label>
+    </div>
+    <label class="field"><span class="fieldLabel">Water goal</span>
+      <div class="iwrap"><input class="in tabnum" id="gW" inputmode="numeric" value="${goals.water}"><span class="iunit">bottles</span></div></label>
+    <button class="primary" id="saveG">Save targets</button>`;
+  const s=sheet("Daily targets", inner);
+  s.el.querySelector("#saveG").onclick=()=>{
+    goals={
+      calories:num(s.el.querySelector("#gCal").value),
+      protein:num(s.el.querySelector("#gP").value),
+      carbs:num(s.el.querySelector("#gC").value),
+      fat:num(s.el.querySelector("#gF").value),
+      water:num(s.el.querySelector("#gW").value)
+    };
+    saveGoals(); s.close(); render();
+  };
+}
+
+function openSettings(){
+  const inner = `
+    <div class="banner">Scanning works two ways. <b>Without a key</b>, the camera reads printed <b>nutrition labels</b> on your device — free and private. <b>Add an Anthropic API key</b> to also estimate plated or restaurant food from a photo.</div>
+    <label class="field"><span class="fieldLabel">Anthropic API key (optional)</span>
+      <div class="iwrap"><input class="in text" id="ak" placeholder="sk-ant-..." value="${apiKey()}"></div></label>
+    <div class="hint">Stored only on this device. Get one at console.anthropic.com → API Keys. Each scan costs a fraction of a cent.</div>
+    <button class="primary" id="saveK" style="margin-top:14px">Save</button>
+    <button class="ghost" id="clearK">Remove key</button>`;
+  const s=sheet("Settings", inner);
+  s.el.querySelector("#saveK").onclick=()=>{ setApiKey(s.el.querySelector("#ak").value.trim()); s.close(); render(); toast("Saved"); };
+  s.el.querySelector("#clearK").onclick=()=>{ setApiKey(""); s.close(); render(); toast("Key removed"); };
+}
+
+/* ========================= scanning ============================ */
+document.getElementById("cam").addEventListener("change", async (e)=>{
+  const file=e.target.files[0]; e.target.value=""; if(!file) return;
+  const key=apiKey();
+  const proc = sheet("Reading…", `<div class="center"><div class="spin"></div>
+    <div style="color:var(--dim);font-size:13px">${key?"AI is reading your photo":"Scanning the label on your device"}</div></div>`);
+  try{
+    if(key){
+      const b64 = await downscaleToB64(file, 1024);
+      const data = await visionExtract(b64.data, b64.mime, key);
+      proc.close();
+      openAdd(data, `<div class="banner">📷 <span><b>AI estimate</b> · confidence ${data.confidence||"?"}. Double-check before logging.</span></div>`);
+    } else {
+      const url = await downscaleToURL(file, 1400);
+      const { data:{ text } } = await Tesseract.recognize(url, "eng");
+      const parsed = parseLabel(text);
+      proc.close();
+      if(parsed.calories===0 && parsed.protein===0 && parsed.carbs===0 && parsed.fat===0){
+        openAdd({}, `<div class="banner">📷 <span>Couldn't read numbers off that label. Try a closer, flatter shot — or add it manually below.</span></div>`);
+      } else {
+        openAdd(parsed, `<div class="banner">📷 <span><b>Scanned label.</b> Check the numbers, then log.</span></div>`);
+      }
+    }
+  }catch(err){
+    proc.close();
+    toast(key ? "AI scan failed — check your key/connection" : "Scan failed — add it manually");
+    openAdd({}, "");
+  }
+});
+
+function parseLabel(raw){
+  const text = raw.replace(/\s+/g," ").toLowerCase();
+  const grab = (re)=>{ const m=text.match(re); return m?num(m[1]):0; };
+  const calories = grab(/calories[^0-9]{0,6}(\d{1,4})/);
+  const protein  = grab(/protein[^0-9]{0,6}(\d{1,3}(?:\.\d)?)/);
+  const carbs    = grab(/(?:total carbohydrate|carbohydrate|carbs?)[^0-9]{0,6}(\d{1,3}(?:\.\d)?)/);
+  let fat        = grab(/total fat[^0-9]{0,6}(\d{1,3}(?:\.\d)?)/);
+  if(!fat) fat   = grab(/(?:^|[^a-z])fat[^0-9]{0,6}(\d{1,3}(?:\.\d)?)/);
+  return { name:"Scanned item", calories, protein, carbs, fat };
+}
+
+async function visionExtract(b64, mime, key){
+  const prompt =
+    "You are a nutrition extractor. The image is either a packaged-food nutrition label or a photo of food. " +
+    "Return ONLY minified JSON, no prose, no code fences: " +
+    '{"name":string,"calories":number,"protein":number,"carbs":number,"fat":number,"confidence":"high"|"medium"|"low"}. ' +
+    "If a label is visible, read values for ONE serving exactly. If it is prepared food with no label, estimate for the portion shown and lower the confidence. Grams for macros, kcal for calories.";
+  const res = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "x-api-key":key,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body: JSON.stringify({
+      model:"claude-sonnet-4-20250514",
+      max_tokens:1000,
+      messages:[{ role:"user", content:[
+        { type:"image", source:{ type:"base64", media_type:mime, data:b64 } },
+        { type:"text", text:prompt }
+      ] }]
+    })
+  });
+  if(!res.ok) throw new Error("api");
+  const json = await res.json();
+  const txt = (json.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+  const clean = txt.replace(/```json|```/g,"").trim();
+  const obj = JSON.parse(clean);
+  return { name:obj.name||"Scanned item", calories:num(obj.calories), protein:num(obj.protein),
+           carbs:num(obj.carbs), fat:num(obj.fat), confidence:obj.confidence||"medium" };
+}
+
+/* image downscale utils */
+function loadImg(file){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=URL.createObjectURL(file); }); }
+async function downscaleCanvas(file, max){
+  const img=await loadImg(file); const s=Math.min(1, max/Math.max(img.width,img.height));
+  const c=document.createElement("canvas"); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height); return c;
+}
+async function downscaleToURL(file, max){ return (await downscaleCanvas(file,max)).toDataURL("image/jpeg",0.85); }
+async function downscaleToB64(file, max){ const c=await downscaleCanvas(file,max); const url=c.toDataURL("image/jpeg",0.85); return { mime:"image/jpeg", data:url.split(",")[1] }; }
+
+/* ========================= toast ============================== */
+let toastT;
+function toast(msg){
+  clearTimeout(toastT);
+  let t=document.querySelector(".toast");
+  if(!t){ t=document.createElement("div"); t.className="toast"; document.body.appendChild(t); }
+  t.textContent=msg; toastT=setTimeout(()=>t.remove(),2600);
+}
+
+/* =================== install / icon / manifest ================= */
+function buildIcon(){
+  const c=document.createElement("canvas"); c.width=180; c.height=180; const x=c.getContext("2d");
+  x.fillStyle="#E8641E"; roundRect(x,0,0,180,180,40); x.fill();
+  x.fillStyle="#1A0E06";
+  [[44,116,20,34],[78,92,20,58],[112,70,20,80]].forEach(([bx,by,bw,bh])=>{ roundRect(x,bx,by,bw,bh,6); x.fill(); });
+  return c.toDataURL("image/png");
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function installMeta(){
+  const icon=buildIcon();
+  const apple=document.createElement("link"); apple.rel="apple-touch-icon"; apple.href=icon; document.head.appendChild(apple);
+  const fav=document.createElement("link"); fav.rel="icon"; fav.href=icon; document.head.appendChild(fav);
+  const manifest={ name:"Nutrition Tracker", short_name:"Nutrition", start_url:".", display:"standalone",
+    background_color:"#0E1116", theme_color:"#0E1116",
+    icons:[{ src:icon, sizes:"180x180", type:"image/png" },{ src:icon, sizes:"512x512", type:"image/png" }] };
+  try{
+    const blob=new Blob([JSON.stringify(manifest)],{type:"application/json"});
+    const l=document.createElement("link"); l.rel="manifest"; l.href=URL.createObjectURL(blob); document.head.appendChild(l);
+  }catch(e){}
+}
+
+/* ========================= boot ================================ */
+(function init(){
+  goals = load("ml_goals", null) || (store("ml_goals",DEFAULT_GOALS), {...DEFAULT_GOALS});
+  // backfill any new goal keys for users with older saved goals
+  goals = { ...DEFAULT_GOALS, ...goals };
+  foods = load("ml_foods", null) || (store("ml_foods",SEED_FOODS), [...SEED_FOODS]);
+  loadDay();
+  installMeta();
+  render();
+})();
+</script>
+</body>
+</html>
