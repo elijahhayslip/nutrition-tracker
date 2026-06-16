@@ -91,6 +91,26 @@ header{display:flex;justify-content:space-between;align-items:center;
 .lgname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;}
 .lgpct{font-family:var(--mono);font-size:11.5px;color:var(--dim);font-weight:600;}
 
+/* ---------- chart ---------- */
+.chartCard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 12px 10px;}
+.chartCard svg{display:block;}
+.chartAxis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:1px;color:var(--faint);text-transform:uppercase;margin-top:6px;padding:0 4px;}
+
+/* ---------- recurring ---------- */
+.recGroupHead{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--dim);
+  text-transform:uppercase;margin:0 2px 9px;font-weight:700;}
+.recRow{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;padding:12px 13px;}
+.recRow.tap{cursor:pointer;}
+.recIc{width:30px;height:30px;border-radius:9px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:800;background:var(--surfaceHi);border:1px solid var(--line);}
+.recName{flex:1;min-width:0;font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.recCat{display:block;font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:2px;}
+.recAmt{font-family:var(--mono);font-size:13.5px;font-weight:700;}
+.recDel{width:24px;height:24px;border-radius:7px;border:none;background:transparent;color:var(--faint);font-size:11px;cursor:pointer;flex:0 0 auto;}
+.miniEmpty{font-size:12.5px;color:var(--faint);text-align:center;padding:14px;border:1px dashed var(--line);border-radius:12px;}
+
 /* ---------- holdings ---------- */
 .list{display:flex;flex-direction:column;gap:9px;}
 .hold{display:grid;grid-template-columns:42px 1fr auto;align-items:center;gap:12px;
@@ -225,11 +245,11 @@ select.in{appearance:none;cursor:pointer;}
 const PALETTE = ["#7C5CFC","#22D3EE","#16C784","#F4B740","#F6465D","#EC4899","#3FA9F5","#A3E635","#FB923C","#2DD4BF"];
 const DEFAULT_BUDGET = { mode:"portfolio", rate:4, fixed:4000 }; // rate = annual draw %
 const SEED_HOLDINGS = [
-  { id:"h1", symbol:"VTI",  name:"Vanguard Total Market", qty:120, cost:215, price:268 },
-  { id:"h2", symbol:"AAPL", name:"Apple Inc.",            qty:90,  cost:165, price:212 },
-  { id:"h3", symbol:"NVDA", name:"NVIDIA Corp.",          qty:55,  cost:98,  price:171 },
-  { id:"h4", symbol:"BTC",  name:"Bitcoin",               qty:0.6, cost:41000, price:64500 },
-  { id:"h5", symbol:"CASH", name:"Cash & Equivalents",    qty:1,   cost:18500, price:18500 },
+  { id:"h1", symbol:"VTI",  name:"Vanguard Total Market", qty:120, cost:215, price:268, kind:"stock" },
+  { id:"h2", symbol:"AAPL", name:"Apple Inc.",            qty:90,  cost:165, price:212, kind:"stock" },
+  { id:"h3", symbol:"NVDA", name:"NVIDIA Corp.",          qty:55,  cost:98,  price:171, kind:"stock" },
+  { id:"h4", symbol:"BTC",  name:"Bitcoin",               qty:0.6, cost:41000, price:64500, kind:"crypto" },
+  { id:"h5", symbol:"CASH", name:"Cash & Equivalents",    qty:1,   cost:18500, price:18500, kind:"cash" },
 ];
 const SEED_CATS = [
   { id:"c1", name:"Housing",      pct:32, color:"#7C5CFC" },
@@ -239,6 +259,14 @@ const SEED_CATS = [
   { id:"c5", name:"Health",       pct:6,  color:"#EC4899" },
   { id:"c6", name:"Reinvest / Save", pct:27, color:"#A3E635" },
 ];
+const SEED_RECURRING = {
+  income: [ { id:"i1", name:"Salary", amount:5200 } ],
+  bills: [
+    { id:"b1", name:"Rent",          amount:1800, catId:"c1" },
+    { id:"b2", name:"Utilities",     amount:180,  catId:"c1" },
+    { id:"b3", name:"Subscriptions", amount:65,   catId:"c4" },
+  ],
+};
 
 /* ============================ state ============================ */
 let view = "portfolio";
@@ -247,6 +275,10 @@ let holdings = [...SEED_HOLDINGS];
 let cats = [...SEED_CATS];
 let budget = {...DEFAULT_BUDGET};
 let expenses = []; // for the active month
+let recurring = { income:[...SEED_RECURRING.income], bills:[...SEED_RECURRING.bills] };
+let snapshots = {}; // { "YYYY-MM": netWorthValue }
+let syncing = false;
+const fhKey = ()=>load("pf_finnhub","");
 
 /* ====================== storage (guarded) ====================== */
 const mem = {};
@@ -255,11 +287,22 @@ function load(k,fb){ try{ const v=localStorage.getItem(k); return v===null?(k in
 
 const pad=(x)=>String(x).padStart(2,"0");
 const monKey=(d)=>`pf_exp_${d.getFullYear()}-${pad(d.getMonth()+1)}`;
-function saveHoldings(){ store("pf_holdings",holdings); }
+function saveHoldings(){ store("pf_holdings",holdings); recordSnapshot(); }
 function saveCats(){ store("pf_cats",cats); }
 function saveBudget(){ store("pf_budget",budget); }
+function saveRecurring(){ store("pf_recurring",recurring); }
 function saveExpenses(){ store(monKey(month),expenses); }
 function loadMonth(){ expenses = load(monKey(month),[]); }
+function recordSnapshot(){
+  const n=new Date(); const ym=`${n.getFullYear()}-${pad(n.getMonth()+1)}`;
+  snapshots[ym]=portfolioTotals().value; store("pf_snapshots",snapshots);
+}
+function seedSnapshots(cur){
+  const out={}, now=new Date(), factors=[0.81,0.85,0.90,0.93,0.97,1];
+  for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    out[`${d.getFullYear()}-${pad(d.getMonth()+1)}`]=Math.round(cur*factors[5-i]); }
+  return out;
+}
 
 /* ========================= helpers ============================= */
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -291,10 +334,51 @@ function monthlyBudget(){
   if(budget.mode==="fixed") return num(budget.fixed);
   return portfolioTotals().value * (num(budget.rate)/100) / 12;
 }
-function spentByCat(){
-  const m={}; expenses.forEach(e=>{ m[e.catId]=(m[e.catId]||0)+num(e.amount); }); return m;
+function recurringByCat(){
+  const m={}; recurring.bills.forEach(b=>{ if(b.catId) m[b.catId]=(m[b.catId]||0)+num(b.amount); }); return m;
 }
+function spentByCat(){
+  const m=recurringByCat(); expenses.forEach(e=>{ m[e.catId]=(m[e.catId]||0)+num(e.amount); }); return m;
+}
+function billsTotal(){ return recurring.bills.reduce((a,b)=>a+num(b.amount),0); }
+function incomeTotal(){ return recurring.income.reduce((a,i)=>a+num(i.amount),0); }
+function loggedTotal(){ return expenses.reduce((a,e)=>a+num(e.amount),0); }
+function spentTotal(){ return billsTotal()+loggedTotal(); }
 function colorFor(i,arr){ return (arr&&arr[i]&&arr[i].color) || PALETTE[i%PALETTE.length]; }
+
+/* ---------------------- live prices ---------------------- */
+const round2=(v)=>Math.round(v*100)/100;
+async function fetchCrypto(sym){
+  const r=await fetch(`https://api.coinbase.com/v2/prices/${encodeURIComponent(String(sym).toUpperCase())}-USD/spot`);
+  if(!r.ok) throw new Error("crypto"); const j=await r.json();
+  const p=parseFloat(j&&j.data&&j.data.amount); if(!p) throw new Error("crypto"); return p;
+}
+async function fetchStock(sym,key){
+  const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
+  if(!r.ok) throw new Error("stock"); const j=await r.json();
+  if(!j||!j.c) throw new Error("stock"); return j.c;
+}
+async function refreshPrices(){
+  if(syncing) return;
+  const key=fhKey();
+  const targets=holdings.filter(h=>h.kind!=="cash"&&String(h.symbol||"").trim());
+  if(!targets.length){ toast("Nothing to refresh"); return; }
+  syncing=true; render();
+  let ok=0, needKey=false, failed=0;
+  await Promise.all(targets.map(async h=>{
+    try{
+      if(h.kind==="crypto"){ h.price=round2(await fetchCrypto(h.symbol)); ok++; }
+      else if(!key){ needKey=true; }
+      else { h.price=round2(await fetchStock(h.symbol,key)); ok++; }
+    }catch(e){ failed++; }
+  }));
+  syncing=false;
+  if(ok){ saveHoldings(); store("pf_lastsync",Date.now()); }
+  render();
+  if(ok) toast(`Updated ${ok} price${ok>1?'s':''}`+(needKey?" · add a Finnhub key for stocks":(failed?` · ${failed} failed`:"")));
+  else if(needKey) toast("Add a free Finnhub key in Settings to fetch stock prices");
+  else toast("Couldn't reach the price service");
+}
 
 /* ========================= rendering =========================== */
 const app=document.getElementById("app");
@@ -306,10 +390,44 @@ function conic(segments){ // [{pct,color}]
   return `conic-gradient(${parts.join(",")})`;
 }
 
+function monLabelShort(ym){ const [y,m]=ym.split("-"); return new Date(y,m-1,1).toLocaleDateString(undefined,{month:"short"}); }
+function netWorthChart(){
+  const keys=Object.keys(snapshots).sort();
+  if(keys.length<2) return "";
+  const pts=keys.map(k=>({k,v:num(snapshots[k])}));
+  const W=440,H=132,pad=8;
+  const vals=pts.map(p=>p.v), min=Math.min(...vals), max=Math.max(...vals), range=(max-min)||1;
+  const X=i=>pad+i*((W-2*pad)/(pts.length-1));
+  const Y=v=>pad+(1-(v-min)/range)*(H-2*pad);
+  const line=pts.map((p,i)=>`${i?"L":"M"}${X(i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(" ");
+  const area=`M${X(0).toFixed(1)} ${H-pad} `+pts.map((p,i)=>`L${X(i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(" ")+` L${X(pts.length-1).toFixed(1)} ${H-pad} Z`;
+  const first=pts[0].v, last=pts[pts.length-1].v, chg=last-first, chgPct=first>0?chg/first*100:0, up=chg>=0;
+  const col=up?"#16C784":"#F6465D";
+  const labels=pts.map((p,i)=> (i===0||i===pts.length-1||i===Math.floor((pts.length-1)/2)) ? `<span>${monLabelShort(p.k)}</span>` : "" ).join("");
+  return `<section class="block">
+    <div class="blockHead"><span class="blockTitle">Net worth trend</span>
+      <span class="colHint ${up?'up':'down'}">${up?'▲':'▼'} ${money(Math.abs(chg))} · ${pct(chgPct)} · ${pts.length} mo</span></div>
+    <div class="chartCard">
+      <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="${col}" stop-opacity=".34"/>
+          <stop offset="1" stop-color="${col}" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="${area}" fill="url(#cg)"/>
+        <path d="${line}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+        <circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="4" fill="${col}"/>
+      </svg>
+      <div class="chartAxis">${labels}</div>
+    </div>
+  </section>`;
+}
+
 function render(){
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===view));
+  const ls=load("pf_lastsync",0);
+  const syncTxt=ls?` · prices synced ${new Date(ls).toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}`:"";
   app.innerHTML = headerHTML() + (view==="portfolio"?portfolioHTML():budgetHTML())
-    + `<div class="footer">saved on this device · ${holdings.length} holdings · ${cats.length} categories</div>`;
+    + `<div class="footer">saved on this device · ${holdings.length} holdings${syncTxt}</div>`;
   wire();
 }
 
@@ -365,6 +483,8 @@ function portfolioHTML(){
       </div>
     </section>
 
+    ${netWorthChart()}
+
     ${sorted.length?`
     <section class="block">
       <div class="blockHead"><span class="blockTitle">Allocation</span><span class="colHint">by market value</span></div>
@@ -377,7 +497,8 @@ function portfolioHTML(){
     </section>`:""}
 
     <section class="block">
-      <div class="blockHead"><span class="blockTitle">Holdings</span><span class="colHint">value · gain/loss</span></div>
+      <div class="blockHead"><span class="blockTitle">Holdings</span>
+        <button class="textBtn" id="refreshBtn" ${syncing?"disabled":""}>${syncing?"↻ syncing…":"↻ refresh prices"}</button></div>
       <div class="list">${rows}</div>
       <button class="addBtn" id="addHolding"><span class="ic">＋</span> Add holding</button>
     </section>`;
@@ -387,7 +508,10 @@ function portfolioHTML(){
 function budgetHTML(){
   const mb=monthlyBudget();
   const spent=spentByCat();
-  const totalSpent=expenses.reduce((a,e)=>a+num(e.amount),0);
+  const recCat=recurringByCat();
+  const totalSpent=spentTotal();
+  const income=incomeTotal();
+  const net=income-totalSpent;
   const allocPct=cats.reduce((a,c)=>a+num(c.pct),0);
   const left=mb-totalSpent;
   const monLabel=month.toLocaleDateString(undefined,{month:"long",year:"numeric"});
@@ -406,7 +530,7 @@ function budgetHTML(){
     return `<div class="cat" data-cat="${c.id}">
       <div class="catTop">
         <span class="catDot" style="background:${col}"></span>
-        <span class="catName">${escapeHtml(c.name)}</span>
+        <span class="catName">${escapeHtml(c.name)}${recCat[c.id]?' <span title="includes recurring bills">🔁</span>':''}</span>
         <span class="catPct tabnum">${c.pct}%</span>
         <span class="catNums tabnum">${money(sp,0)} <span class="g">/ ${money(alloc,0)}</span></span>
       </div>
@@ -455,11 +579,20 @@ function budgetHTML(){
 
     <div class="summaryCard">
       <div class="sgrid">
-        <div><div class="k">Allocated</div><div class="v tabnum ${allocPct>100?'down':''}">${allocPct}%</div></div>
-        <div><div class="k">Spent</div><div class="v tabnum">${mb>0?Math.round(totalSpent/mb*100):0}%</div></div>
-        <div><div class="k">Annual draw</div><div class="v tabnum">${money(mb*12,0)}</div></div>
+        <div><div class="k">Income</div><div class="v tabnum up">${money(income,0)}</div></div>
+        <div><div class="k">Spending</div><div class="v tabnum">${money(totalSpent,0)}</div></div>
+        <div><div class="k">Net saved</div><div class="v tabnum ${net>=0?'up':'down'}">${(net>=0?'+':'-')+money(Math.abs(net),0)}</div></div>
       </div>
     </div>
+
+    <section class="block">
+      <div class="blockHead"><span class="blockTitle">Recurring</span><span class="textBtn" id="manageRec">manage</span></div>
+      <div class="list">
+        ${recurring.income.map(it=>`<div class="recRow"><span class="recIc up">＋</span><span class="recName">${escapeHtml(it.name)}</span><span class="recAmt tabnum up">+${money(num(it.amount),0)}</span></div>`).join("")}
+        ${recurring.bills.map(it=>{const c=cats.find(x=>x.id===it.catId);return `<div class="recRow"><span class="recIc down">🔁</span><span class="recName">${escapeHtml(it.name)}<span class="recCat">${c?escapeHtml(c.name):'uncategorized'}</span></span><span class="recAmt tabnum down">−${money(num(it.amount),0)}</span></div>`;}).join("")}
+        ${(!recurring.income.length&&!recurring.bills.length)?`<div class="empty">No recurring income or bills yet. Add a salary and your fixed bills so they apply every month automatically.</div>`:""}
+      </div>
+    </section>
 
     <section class="block">
       <div class="blockHead"><span class="blockTitle">Categories</span><span class="textBtn" id="addCat">+ category</span></div>
@@ -477,11 +610,13 @@ function wire(){
 
   if(view==="portfolio"){
     document.getElementById("addHolding").onclick=()=>openHolding(null);
+    document.getElementById("refreshBtn").onclick=refreshPrices;
     app.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openHolding(b.dataset.edit));
   } else {
     document.getElementById("prevMonth").onclick=()=>{ const d=new Date(month);d.setMonth(d.getMonth()-1);month=d;loadMonth();render(); };
     const nx=document.getElementById("nextMonth"); if(nx&&!isCurMonth()) nx.onclick=()=>{ const d=new Date(month);d.setMonth(d.getMonth()+1);month=d;loadMonth();render(); };
     document.getElementById("basisBtn").onclick=openBudgetBasis;
+    document.getElementById("manageRec").onclick=openRecurring;
     document.getElementById("addCat").onclick=()=>openCat(null);
     document.getElementById("addExpense").onclick=()=>openExpense();
     app.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>openCat(b.dataset.cat));
@@ -512,22 +647,30 @@ function openHolding(id){
       <label class="field"><span class="fieldLabel">Quantity</span>
         <div class="iwrap"><input class="in" id="hQty" inputmode="decimal" placeholder="0" value="${h?h.qty:""}"></div></label>
     </div>
-    <label class="field"><span class="fieldLabel">Name (optional)</span>
-      <div class="iwrap"><input class="in text" id="hName" placeholder="Apple Inc." value="${h?escapeHtml(h.name||""):""}"></div></label>
+    <div class="grid2">
+      <label class="field"><span class="fieldLabel">Name (optional)</span>
+        <div class="iwrap"><input class="in text" id="hName" placeholder="Apple Inc." value="${h?escapeHtml(h.name||""):""}"></div></label>
+      <label class="field"><span class="fieldLabel">Asset type</span>
+        <div class="iwrap"><select class="in" id="hKind">
+          <option value="stock" ${(!h||h.kind==="stock")?"selected":""}>Stock / ETF</option>
+          <option value="crypto" ${h&&h.kind==="crypto"?"selected":""}>Crypto</option>
+          <option value="cash" ${h&&h.kind==="cash"?"selected":""}>Cash</option>
+        </select></div></label>
+    </div>
     <div class="grid2">
       <label class="field"><span class="fieldLabel">Avg cost / unit</span>
         <div class="iwrap"><span class="ipre">$</span><input class="in" id="hCost" inputmode="decimal" placeholder="0.00" value="${h?h.cost:""}"></div></label>
       <label class="field"><span class="fieldLabel">Current price</span>
         <div class="iwrap"><span class="ipre">$</span><input class="in" id="hPrice" inputmode="decimal" placeholder="0.00" value="${h?h.price:""}"></div></label>
     </div>
-    <div class="hint">For cash, use quantity 1 and put the balance as both cost and price.</div>
+    <div class="hint">Stocks/ETFs &amp; crypto can auto-update via <b>refresh prices</b> (use the ticker, e.g. AAPL or ETH). For cash, set quantity 1 and use the balance as both cost and price.</div>
     <button class="primary" id="saveH" style="margin-top:14px">${h?"Save changes":"Add holding"}</button>
     ${h?`<button class="ghost danger" id="delH">Delete holding</button>`:""}`;
   const s=sheet(h?"Edit holding":"Add holding",inner);
   s.el.querySelector("#saveH").onclick=()=>{
     const sym=s.el.querySelector("#hSym").value.trim();
     if(!sym){ toast("Add a symbol first"); return; }
-    const rec={ symbol:sym, name:s.el.querySelector("#hName").value.trim(),
+    const rec={ symbol:sym, name:s.el.querySelector("#hName").value.trim(), kind:s.el.querySelector("#hKind").value,
       qty:num(s.el.querySelector("#hQty").value), cost:num(s.el.querySelector("#hCost").value),
       price:num(s.el.querySelector("#hPrice").value) };
     if(h){ Object.assign(h,rec); } else { holdings.push({id:uid(),...rec}); }
@@ -617,22 +760,92 @@ function openBudgetBasis(){
   };
 }
 
+function openRecurring(){
+  const s=sheet("Recurring cash flow",
+    `<div class="banner">Recurring <b>income</b> and <b>bills</b> apply automatically every month. Bills assigned to a category count toward that category's spending — no need to log them.</div><div id="recBody"></div>`);
+  function recRow(it,type){
+    const c=type==="bill"?cats.find(x=>x.id===it.catId):null;
+    return `<div class="recRow tap" data-edit-rec="${type}:${it.id}">
+      <span class="recIc ${type==='income'?'up':'down'}">${type==='income'?'＋':'🔁'}</span>
+      <span class="recName">${escapeHtml(it.name)}${c?`<span class="recCat">${escapeHtml(c.name)}</span>`:""}</span>
+      <span class="recAmt tabnum ${type==='income'?'up':'down'}">${type==='income'?'+':'−'}${money(num(it.amount),0)}</span>
+      <button class="recDel" data-del-rec="${type}:${it.id}" aria-label="Delete">✕</button>
+    </div>`;
+  }
+  function draw(){
+    const inc=recurring.income.map(it=>recRow(it,"income")).join("")||`<div class="miniEmpty">No income yet</div>`;
+    const bills=recurring.bills.map(it=>recRow(it,"bill")).join("")||`<div class="miniEmpty">No bills yet</div>`;
+    s.el.querySelector("#recBody").innerHTML=`
+      <div class="recGroupHead">Monthly income</div><div class="list">${inc}</div>
+      <button class="addBtn" data-add="income"><span class="ic">＋</span> Add income source</button>
+      <div class="recGroupHead" style="margin-top:18px">Recurring bills</div><div class="list">${bills}</div>
+      <button class="addBtn" data-add="bill"><span class="ic">＋</span> Add recurring bill</button>`;
+    s.el.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>openRecItem(b.dataset.add,null,draw));
+    s.el.querySelectorAll("[data-edit-rec]").forEach(b=>b.onclick=()=>{
+      const [type,id]=b.dataset.editRec.split(":");
+      openRecItem(type,(type==="income"?recurring.income:recurring.bills).find(x=>x.id===id),draw);
+    });
+    s.el.querySelectorAll("[data-del-rec]").forEach(b=>b.onclick=(ev)=>{
+      ev.stopPropagation(); const [type,id]=b.dataset.delRec.split(":");
+      if(type==="income") recurring.income=recurring.income.filter(x=>x.id!==id);
+      else recurring.bills=recurring.bills.filter(x=>x.id!==id);
+      saveRecurring(); draw(); render();
+    });
+  }
+  draw();
+}
+
+function openRecItem(type,item,after){
+  const isBill=type==="bill";
+  const opts=cats.map(c=>`<option value="${c.id}" ${item&&item.catId===c.id?"selected":""}>${escapeHtml(c.name)}</option>`).join("");
+  const inner=`
+    <label class="field"><span class="fieldLabel">${isBill?"Bill name":"Income source"}</span>
+      <div class="iwrap"><input class="in text" id="rName" placeholder="${isBill?'Rent':'Salary'}" value="${item?escapeHtml(item.name):""}" autofocus></div></label>
+    <label class="field"><span class="fieldLabel">Amount / month</span>
+      <div class="iwrap"><span class="ipre">$</span><input class="in" id="rAmt" inputmode="decimal" placeholder="0" value="${item?item.amount:""}"></div></label>
+    ${isBill?`<label class="field"><span class="fieldLabel">Counts toward category</span>
+      <div class="iwrap"><select class="in" id="rCat">${opts}</select></div></label>`:""}
+    <button class="primary" id="saveR" style="margin-top:6px">${item?"Save":"Add"}</button>
+    ${item?`<button class="ghost danger" id="delR">Delete</button>`:""}`;
+  const s=sheet(item?(isBill?"Edit bill":"Edit income"):(isBill?"New bill":"New income"),inner);
+  s.el.querySelector("#saveR").onclick=()=>{
+    const name=s.el.querySelector("#rName").value.trim();
+    const amt=num(s.el.querySelector("#rAmt").value);
+    if(!name){ toast("Name it first"); return; }
+    if(amt<=0){ toast("Enter an amount"); return; }
+    const rec={name,amount:amt}; if(isBill) rec.catId=s.el.querySelector("#rCat").value;
+    const list=isBill?recurring.bills:recurring.income;
+    if(item){ Object.assign(item,rec); } else { list.push({id:uid(),...rec}); }
+    saveRecurring(); s.close(); after&&after(); render();
+  };
+  if(item) s.el.querySelector("#delR").onclick=()=>{
+    if(isBill) recurring.bills=recurring.bills.filter(x=>x.id!==item.id);
+    else recurring.income=recurring.income.filter(x=>x.id!==item.id);
+    saveRecurring(); s.close(); after&&after(); render();
+  };
+}
+
 function openSettings(){
   const t=portfolioTotals();
   const inner=`
-    <div class="banner">All data lives only on <b>this device</b> (localStorage). Nothing is uploaded. Prices are entered manually — update a holding's price anytime to refresh your net worth.</div>
-    <div class="summaryCard" style="margin-bottom:14px">
+    <div class="banner">All data lives only on <b>this device</b> (localStorage). Nothing is uploaded.</div>
+    <div class="summaryCard" style="margin-bottom:16px">
       <div class="sgrid">
         <div><div class="k">Net worth</div><div class="v tabnum">${money(t.value,0)}</div></div>
         <div><div class="k">Monthly budget</div><div class="v tabnum">${money(monthlyBudget(),0)}</div></div>
         <div><div class="k">Holdings</div><div class="v tabnum">${holdings.length}</div></div>
       </div>
     </div>
+    <label class="field"><span class="fieldLabel">Finnhub API key (for live stock prices)</span>
+      <div class="iwrap"><input class="in text" id="fhk" placeholder="paste your free key…" value="${escapeHtml(fhKey())}"></div></label>
+    <div class="hint">Free key at <b>finnhub.io</b> → Dashboard. Crypto prices (BTC, ETH…) work without any key via Coinbase. Stored only on this device; refresh from the Portfolio tab.</div>
+    <button class="primary" id="saveKey" style="margin:14px 0 4px">Save key</button>
     <button class="ghost" id="exportBtn">Export data (JSON)</button>
     <button class="ghost danger" id="resetBtn">Reset everything</button>`;
   const s=sheet("Settings",inner);
+  s.el.querySelector("#saveKey").onclick=()=>{ store("pf_finnhub",s.el.querySelector("#fhk").value.trim()); s.close(); toast("Key saved"); };
   s.el.querySelector("#exportBtn").onclick=()=>{
-    const data={ holdings, cats, budget, expenses:{[monKey(month)]:expenses} };
+    const data={ holdings, cats, budget, recurring, snapshots, expenses:{[monKey(month)]:expenses} };
     const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="capital-export.json"; a.click();
     toast("Exported");
@@ -640,7 +853,9 @@ function openSettings(){
   s.el.querySelector("#resetBtn").onclick=()=>{
     if(!confirm("Erase all holdings, categories, budget and expenses?")) return;
     holdings=[...SEED_HOLDINGS]; cats=[...SEED_CATS]; budget={...DEFAULT_BUDGET};
-    saveHoldings(); saveCats(); saveBudget();
+    recurring={income:[...SEED_RECURRING.income],bills:[...SEED_RECURRING.bills]};
+    snapshots=seedSnapshots(portfolioTotals().value);
+    saveCats(); saveBudget(); saveRecurring(); store("pf_snapshots",snapshots); saveHoldings();
     try{ Object.keys(localStorage).filter(k=>k.startsWith("pf_exp_")).forEach(k=>localStorage.removeItem(k)); }catch(e){}
     loadMonth(); s.close(); render(); toast("Reset to sample data");
   };
@@ -680,9 +895,13 @@ function installMeta(){
 
 /* ========================= boot ================================ */
 (function init(){
-  holdings = load("pf_holdings",null) || (store("pf_holdings",SEED_HOLDINGS),[...SEED_HOLDINGS]);
-  cats     = load("pf_cats",null)     || (store("pf_cats",SEED_CATS),[...SEED_CATS]);
-  budget   = { ...DEFAULT_BUDGET, ...(load("pf_budget",null)||{}) };
+  holdings  = load("pf_holdings",null) || (store("pf_holdings",SEED_HOLDINGS),[...SEED_HOLDINGS]);
+  holdings.forEach(h=>{ if(!h.kind) h.kind=/cash/i.test(String(h.symbol)+(h.name||""))?"cash":"stock"; });
+  cats      = load("pf_cats",null)     || (store("pf_cats",SEED_CATS),[...SEED_CATS]);
+  budget    = { ...DEFAULT_BUDGET, ...(load("pf_budget",null)||{}) };
+  recurring = load("pf_recurring",null) || (store("pf_recurring",SEED_RECURRING),{income:[...SEED_RECURRING.income],bills:[...SEED_RECURRING.bills]});
+  snapshots = load("pf_snapshots",null) || seedSnapshots(portfolioTotals().value);
+  recordSnapshot();
   loadMonth();
   installMeta();
   render();
