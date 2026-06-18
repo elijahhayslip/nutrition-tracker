@@ -163,6 +163,38 @@ header{display:flex;justify-content:space-between;align-items:center;
 .sgrid .k{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;color:var(--faint);text-transform:uppercase;}
 .sgrid .v{font-family:var(--mono);font-size:17px;font-weight:800;margin-top:5px;}
 
+/* ---------- net-worth card (budget) ---------- */
+.nwCard{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;cursor:pointer;
+  background:linear-gradient(160deg,rgba(124,92,252,.18),transparent 70%),var(--surface);
+  border:1px solid var(--line);border-radius:16px;padding:15px 17px;margin-bottom:14px;color:var(--text);}
+.nwNum{font-family:var(--mono);font-size:24px;font-weight:800;margin-top:4px;}
+.nwRight{display:flex;flex-direction:column;align-items:flex-end;gap:7px;}
+.nwLink{font-family:var(--mono);font-size:11px;color:var(--accent2);letter-spacing:.5px;}
+
+/* ---------- fun money card ---------- */
+.funCard{background:linear-gradient(160deg,rgba(244,183,64,.16),transparent 70%),var(--surface);
+  border:1px solid var(--line);border-radius:16px;padding:17px;margin-bottom:16px;}
+.funCard.over{border-color:rgba(246,70,93,.5);}
+.funTop{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:13px;}
+.funNum{font-family:var(--mono);font-size:30px;font-weight:800;color:var(--gold);}
+.funCard.over .funNum{color:var(--down);}
+.funOver{font-size:13px;}
+.funMeta{font-family:var(--mono);font-size:12px;color:var(--dim);}
+
+/* ---------- segmented (tx type) ---------- */
+.seg{display:flex;gap:8px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:5px;margin-bottom:14px;}
+.segBtn{flex:1;border:none;background:transparent;color:var(--dim);font-size:13px;font-weight:600;
+  padding:10px;border-radius:8px;cursor:pointer;}
+.segBtn.on{background:var(--surfaceHi);color:var(--text);}
+
+/* ---------- fun toggle (category editor) ---------- */
+.funToggle{width:100%;display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--line);
+  color:var(--dim);border-radius:11px;padding:13px;font-size:13px;cursor:pointer;margin-bottom:12px;text-align:left;}
+.funToggle.on{border-color:var(--gold);color:var(--text);}
+.funToggle .cbox{width:20px;height:20px;border-radius:6px;border:1px solid var(--line);display:flex;
+  align-items:center;justify-content:center;font-size:11px;background:var(--bg);flex:0 0 auto;}
+.funToggle.on .cbox{background:var(--gold);border-color:var(--gold);color:#1A0E06;font-weight:800;}
+
 /* ---------- empty ---------- */
 .empty{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:26px 20px;
   color:var(--faint);font-size:13px;text-align:center;line-height:1.55;}
@@ -255,9 +287,9 @@ const SEED_CATS = [
   { id:"c1", name:"Housing",      pct:32, color:"#7C5CFC" },
   { id:"c2", name:"Food & Dining",pct:14, color:"#16C784" },
   { id:"c3", name:"Transport",    pct:9,  color:"#22D3EE" },
-  { id:"c4", name:"Lifestyle",    pct:12, color:"#F4B740" },
+  { id:"c4", name:"Lifestyle",    pct:20, color:"#F4B740", fun:true },
   { id:"c5", name:"Health",       pct:6,  color:"#EC4899" },
-  { id:"c6", name:"Reinvest / Save", pct:27, color:"#A3E635" },
+  { id:"c6", name:"Reinvest / Save", pct:19, color:"#A3E635" },
 ];
 const SEED_RECURRING = {
   income: [ { id:"i1", name:"Salary", amount:5200 } ],
@@ -337,13 +369,24 @@ function monthlyBudget(){
 function recurringByCat(){
   const m={}; recurring.bills.forEach(b=>{ if(b.catId) m[b.catId]=(m[b.catId]||0)+num(b.amount); }); return m;
 }
+const expenseTx = ()=>expenses.filter(e=>e.type!=="income");
+const incomeTx  = ()=>expenses.filter(e=>e.type==="income");
 function spentByCat(){
-  const m=recurringByCat(); expenses.forEach(e=>{ m[e.catId]=(m[e.catId]||0)+num(e.amount); }); return m;
+  const m=recurringByCat(); expenseTx().forEach(e=>{ if(e.catId) m[e.catId]=(m[e.catId]||0)+num(e.amount); }); return m;
 }
 function billsTotal(){ return recurring.bills.reduce((a,b)=>a+num(b.amount),0); }
-function incomeTotal(){ return recurring.income.reduce((a,i)=>a+num(i.amount),0); }
-function loggedTotal(){ return expenses.reduce((a,e)=>a+num(e.amount),0); }
+function incomeTotal(){ return recurring.income.reduce((a,i)=>a+num(i.amount),0) + incomeTx().reduce((a,e)=>a+num(e.amount),0); }
+function loggedTotal(){ return expenseTx().reduce((a,e)=>a+num(e.amount),0); }
 function spentTotal(){ return billsTotal()+loggedTotal(); }
+function funStats(){
+  const mb=monthlyBudget(), spent=spentByCat(); let alloc=0, sp=0;
+  cats.filter(c=>c.fun).forEach(c=>{ alloc+=mb*num(c.pct)/100; sp+=(spent[c.id]||0); });
+  return { alloc, spent:sp, left:alloc-sp, has:cats.some(c=>c.fun) };
+}
+function txDayLabel(e){
+  if(!e.date) return month.toLocaleDateString(undefined,{month:"short"});
+  return new Date(e.date+"T00:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric"});
+}
 function colorFor(i,arr){ return (arr&&arr[i]&&arr[i].color) || PALETTE[i%PALETTE.length]; }
 
 /* ---------------------- live prices ---------------------- */
@@ -542,18 +585,27 @@ function budgetHTML(){
     </div>`;
   }).join("") : `<div class="empty">No budget categories yet.<br>Add categories like Housing or Food and assign each a % of your monthly budget.</div>`;
 
-  const recent = expenses.length? `
+  const nw=portfolioTotals();
+  const fun=funStats();
+  const funPct=fun.alloc>0?Math.min(100,fun.spent/fun.alloc*100):0;
+
+  const txList=[...expenses].reverse();
+  const txSection = `
     <section class="block">
-      <div class="blockHead"><span class="blockTitle">This month's spending</span><span class="textBtn" id="clearMonth">clear</span></div>
-      <div class="list">${[...expenses].reverse().slice(0,8).map(e=>{
-        const c=cats.find(x=>x.id===e.catId);
+      <div class="blockHead"><span class="blockTitle">Transactions</span>
+        ${expenses.length?`<span class="textBtn" id="clearMonth">clear month</span>`:`<span class="colHint">this month</span>`}</div>
+      ${txList.length? `<div class="list">${txList.map(e=>{
+        const c=cats.find(x=>x.id===e.catId), inc=e.type==="income";
+        const col=c?colorFor(cats.indexOf(c),cats):(inc?'#16C784':'#5C6884');
         return `<div class="hold" data-delexp="${e.id}">
-          <div class="tick" style="background:${c?colorFor(cats.indexOf(c),cats):'#444'}33;color:${c?colorFor(cats.indexOf(c),cats):'#888'}">${(c?c.name:'?').slice(0,2).toUpperCase()}</div>
-          <div class="hMid"><div class="hSym" style="font-family:var(--sans);font-size:14px">${escapeHtml(e.name||(c?c.name:'Expense'))}</div><div class="hName">${c?escapeHtml(c.name):'Uncategorized'} · tap to remove</div></div>
-          <div class="hRight"><div class="hVal tabnum down">−${money(num(e.amount),0)}</div></div>
+          <div class="tick" style="background:${col}22;color:${col}">${inc?'＋':(c?c.name.slice(0,2).toUpperCase():'··')}</div>
+          <div class="hMid"><div class="hSym" style="font-family:var(--sans);font-size:14px">${escapeHtml(e.name||(inc?'Income':(c?c.name:'Expense')))}</div>
+            <div class="hName">${txDayLabel(e)} · ${inc?'income':(c?escapeHtml(c.name):'uncategorized')} · tap to remove</div></div>
+          <div class="hRight"><div class="hVal tabnum ${inc?'up':'down'}">${inc?'+':'−'}${money(num(e.amount),0)}</div></div>
         </div>`;
-      }).join("")}</div>
-    </section>`:"";
+      }).join("")}</div>`
+      : `<div class="empty">No transactions logged this month yet.<br>Tap “Add transaction” to record spending or one-off income.</div>`}
+    </section>`;
 
   return `
     <div class="monthRow">
@@ -561,6 +613,14 @@ function budgetHTML(){
       <div><div class="monthLabel">${monLabel}</div><div class="monthSub">${isCurMonth()?"current month":"viewing history"}</div></div>
       <button class="nav" id="nextMonth" ${isCurMonth()?"disabled":""}>›</button>
     </div>
+
+    <button class="nwCard" id="netWorthCard">
+      <div><div class="heroLabel">Net worth</div><div class="nwNum tabnum">${money(nw.value,0)}</div></div>
+      <div class="nwRight">
+        <span class="delta ${nw.gain>=0?'up':'down'}"><span class="arrow">${nw.gain>=0?'▲':'▼'}</span> ${pct(nw.gainPct)}</span>
+        <span class="nwLink">portfolio ›</span>
+      </div>
+    </button>
 
     <section class="budgetHero">
       <div class="bhTop">
@@ -585,8 +645,20 @@ function budgetHTML(){
       </div>
     </div>
 
+    <section class="funCard ${fun.left<0?'over':''}">
+      <div class="funTop">
+        <div><div class="heroLabel">🎉 Fun money left</div>
+          <div class="funNum tabnum">${fun.has?money(Math.max(0,fun.left),0):"—"}${fun.left<0?' <span class="funOver">over</span>':''}</div></div>
+        <div class="funMeta">${fun.has?`of ${money(fun.alloc,0)}`:""}</div>
+      </div>
+      ${fun.has
+        ? `<div class="track" style="height:9px"><div class="fill" style="width:${funPct}%;background:${fun.left<0?'var(--down)':'linear-gradient(90deg,var(--gold),#F6C453)'}"></div></div>
+           <div class="catFoot" style="margin-top:9px"><span class="catLeft ${fun.left<0?'over':''}">${money(fun.spent,0)} spent on fun</span><span class="colHint">tap a category to mark it fun</span></div>`
+        : `<div class="hint" style="margin-top:4px">Mark any category as “fun / discretionary” (edit a category) and your play-money budget shows up here.</div>`}
+    </section>
+
     <section class="block">
-      <div class="blockHead"><span class="blockTitle">Recurring</span><span class="textBtn" id="manageRec">manage</span></div>
+      <div class="blockHead"><span class="blockTitle">Recurring bills &amp; income</span><span class="textBtn" id="manageRec">manage</span></div>
       <div class="list">
         ${recurring.income.map(it=>`<div class="recRow"><span class="recIc up">＋</span><span class="recName">${escapeHtml(it.name)}</span><span class="recAmt tabnum up">+${money(num(it.amount),0)}</span></div>`).join("")}
         ${recurring.bills.map(it=>{const c=cats.find(x=>x.id===it.catId);return `<div class="recRow"><span class="recIc down">🔁</span><span class="recName">${escapeHtml(it.name)}<span class="recCat">${c?escapeHtml(c.name):'uncategorized'}</span></span><span class="recAmt tabnum down">−${money(num(it.amount),0)}</span></div>`;}).join("")}
@@ -597,10 +669,10 @@ function budgetHTML(){
     <section class="block">
       <div class="blockHead"><span class="blockTitle">Categories</span><span class="textBtn" id="addCat">+ category</span></div>
       <div class="list">${catRows}</div>
-      <button class="addBtn" id="addExpense"><span class="ic">＋</span> Log an expense</button>
+      <button class="addBtn" id="addExpense"><span class="ic">＋</span> Add transaction</button>
     </section>
 
-    ${recent}`;
+    ${txSection}`;
 }
 
 /* ========================= events ============================== */
@@ -613,12 +685,13 @@ function wire(){
     document.getElementById("refreshBtn").onclick=refreshPrices;
     app.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openHolding(b.dataset.edit));
   } else {
+    document.getElementById("netWorthCard").onclick=()=>{ view="portfolio"; render(); };
     document.getElementById("prevMonth").onclick=()=>{ const d=new Date(month);d.setMonth(d.getMonth()-1);month=d;loadMonth();render(); };
     const nx=document.getElementById("nextMonth"); if(nx&&!isCurMonth()) nx.onclick=()=>{ const d=new Date(month);d.setMonth(d.getMonth()+1);month=d;loadMonth();render(); };
     document.getElementById("basisBtn").onclick=openBudgetBasis;
     document.getElementById("manageRec").onclick=openRecurring;
     document.getElementById("addCat").onclick=()=>openCat(null);
-    document.getElementById("addExpense").onclick=()=>openExpense();
+    document.getElementById("addExpense").onclick=()=>openTransaction();
     app.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>openCat(b.dataset.cat));
     app.querySelectorAll("[data-delexp]").forEach(b=>b.onclick=()=>{ expenses=expenses.filter(e=>e.id!==b.dataset.delexp); saveExpenses(); render(); });
     const cm=document.getElementById("clearMonth"); if(cm) cm.onclick=()=>{ if(confirm("Clear all expenses for this month?")){ expenses=[]; saveExpenses(); render(); } };
@@ -692,38 +765,60 @@ function openCat(id){
     <div class="hint">${free}% of your budget is currently unassigned.</div>
     <span class="fieldLabel" style="margin-top:14px">Color</span>
     <div class="swatches">${swatches}</div>
+    <button class="funToggle ${c&&c.fun?'on':''}" id="funTog" type="button">
+      <span class="cbox">${c&&c.fun?'✓':''}</span> 🎉 Count as fun / discretionary money</button>
     <button class="primary" id="saveC">${c?"Save category":"Add category"}</button>
     ${c?`<button class="ghost danger" id="delC">Delete category</button>`:""}`;
   const s=sheet(c?"Edit category":"New category",inner);
   let color=c?c.color:PALETTE[cats.length%PALETTE.length];
+  let fun=!!(c&&c.fun);
   s.el.querySelectorAll("[data-sw]").forEach(b=>b.onclick=()=>{ color=b.dataset.sw; s.el.querySelectorAll(".sw").forEach(x=>x.classList.toggle("on",x===b)); });
+  const ft=s.el.querySelector("#funTog");
+  ft.onclick=()=>{ fun=!fun; ft.classList.toggle("on",fun); ft.querySelector(".cbox").textContent=fun?'✓':''; };
   s.el.querySelector("#saveC").onclick=()=>{
     const name=s.el.querySelector("#cName").value.trim();
     if(!name){ toast("Name it first"); return; }
-    const rec={ name, pct:num(s.el.querySelector("#cPct").value), color };
+    const rec={ name, pct:num(s.el.querySelector("#cPct").value), color, fun };
     if(c){ Object.assign(c,rec); } else { cats.push({id:uid(),...rec}); }
     saveCats(); s.close(); render();
   };
   if(c) s.el.querySelector("#delC").onclick=()=>{ cats=cats.filter(x=>x.id!==id); saveCats(); s.close(); render(); };
 }
 
-function openExpense(){
-  if(!cats.length){ toast("Add a category first"); return; }
+function openTransaction(){
   const opts=cats.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  const today=(()=>{ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; })();
+  const defDate=isCurMonth()?today:`${month.getFullYear()}-${pad(month.getMonth()+1)}-01`;
   const inner=`
+    <div class="seg" id="txType">
+      <button class="segBtn on" data-type="expense" type="button">− Expense</button>
+      <button class="segBtn" data-type="income" type="button">＋ Income</button>
+    </div>
     <label class="field"><span class="fieldLabel">Amount</span>
       <div class="iwrap"><span class="ipre">$</span><input class="in" id="eAmt" inputmode="decimal" placeholder="0.00" autofocus></div></label>
-    <label class="field"><span class="fieldLabel">Category</span>
+    <label class="field" id="catField" ${cats.length?"":"style=display:none"}><span class="fieldLabel">Category</span>
       <div class="iwrap"><select class="in" id="eCat">${opts}</select></div></label>
-    <label class="field"><span class="fieldLabel">Note (optional)</span>
-      <div class="iwrap"><input class="in text" id="eName" placeholder="Groceries, rent…"></div></label>
-    <button class="primary" id="saveE" style="margin-top:6px">Log expense</button>`;
-  const s=sheet("Log expense",inner);
+    <div class="grid2">
+      <label class="field"><span class="fieldLabel">Date</span>
+        <div class="iwrap"><input class="in" id="eDate" type="date" value="${defDate}"></div></label>
+      <label class="field"><span class="fieldLabel">Note (optional)</span>
+        <div class="iwrap"><input class="in text" id="eName" placeholder="Groceries…"></div></label>
+    </div>
+    <button class="primary" id="saveE" style="margin-top:6px">Add transaction</button>`;
+  const s=sheet("Add transaction",inner);
+  let type="expense";
+  const catField=s.el.querySelector("#catField");
+  s.el.querySelectorAll("[data-type]").forEach(b=>b.onclick=()=>{
+    type=b.dataset.type; s.el.querySelectorAll(".segBtn").forEach(x=>x.classList.toggle("on",x===b));
+    catField.style.display=(type==="income"||!cats.length)?"none":"";
+  });
   s.el.querySelector("#saveE").onclick=()=>{
     const amt=num(s.el.querySelector("#eAmt").value);
     if(amt<=0){ toast("Enter an amount"); return; }
-    expenses.push({ id:uid(), catId:s.el.querySelector("#eCat").value, name:s.el.querySelector("#eName").value.trim(), amount:amt });
-    saveExpenses(); s.close(); render();
+    if(type==="expense"&&!cats.length){ toast("Add a category first"); return; }
+    const tx={ id:uid(), type, amount:amt, date:s.el.querySelector("#eDate").value||defDate, name:s.el.querySelector("#eName").value.trim() };
+    if(type==="expense") tx.catId=s.el.querySelector("#eCat").value;
+    expenses.push(tx); saveExpenses(); s.close(); render();
   };
 }
 
