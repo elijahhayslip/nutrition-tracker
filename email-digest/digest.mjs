@@ -36,6 +36,34 @@ const maxEmails = Number(MAX_EMAILS) || 60;
 // ---------------------------------------------------------------------------
 // Gmail client
 // ---------------------------------------------------------------------------
+// Current hour (0-23) in US Central time, DST-aware via the IANA database.
+function centralHour() {
+  const h = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      hour: "numeric",
+      hour12: false,
+    }).format(new Date())
+  );
+  return h === 24 ? 0 : h; // some platforms render midnight as 24
+}
+
+// On scheduled runs we fire at several UTC hours to cover both CST and CDT;
+// skip any run whose real Central hour isn't one we want. Manual runs always go.
+function shouldRunNow() {
+  const guard = (process.env.GUARD_HOURS_CENTRAL || "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n));
+  if (process.env.GITHUB_EVENT_NAME !== "schedule" || !guard.length) return true;
+  const h = centralHour();
+  if (guard.includes(h)) return true;
+  console.log(
+    `Central time is ${h}:00 — not a scheduled digest hour (${guard.join(", ")}). Skipping.`
+  );
+  return false;
+}
+
 function gmailClient() {
   const oauth2 = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
   oauth2.setCredentials({ refresh_token: GOOGLE_REFRESH_TOKEN });
@@ -257,6 +285,8 @@ function buildRaw({ to, from, subject, html, text }) {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
+  if (!shouldRunNow()) return;
+
   requireEnv("GOOGLE_CLIENT_ID", GOOGLE_CLIENT_ID);
   requireEnv("GOOGLE_CLIENT_SECRET", GOOGLE_CLIENT_SECRET);
   requireEnv("GOOGLE_REFRESH_TOKEN", GOOGLE_REFRESH_TOKEN);

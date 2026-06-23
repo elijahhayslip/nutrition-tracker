@@ -57,10 +57,19 @@ In the GitHub repo → **Settings → Secrets and variables → Actions**:
 
 ### 3. Schedule
 
-`.github/workflows/email-digest.yml` runs daily at **13:00 UTC** (≈ 7 AM US
-Central). Edit the `cron:` line for your timezone. You can also trigger it
-manually from the **Actions** tab ("Run workflow"), with an optional **dry run**
-that logs the digest instead of emailing it.
+`.github/workflows/email-digest.yml` sends **two digests a day — 7:00 AM and
+5:00 PM US Central**, year-round.
+
+GitHub cron is UTC-only and ignores daylight saving, so the workflow fires at
+both the CDT and CST candidate hours (12:00/13:00 and 22:00/23:00 UTC) and the
+script skips any run whose real Central-time hour isn't 7 or 17. Net result:
+exactly two emails per day at the right local time, with no twice-a-year edits.
+
+To change the times, edit the `cron:` lines **and** the `GUARD_HOURS_CENTRAL`
+value (24-hour Central, comma-separated) so they agree. You can also trigger a
+run anytime from the **Actions** tab ("Run workflow") — manual runs ignore the
+hour guard, and there's an optional **dry run** that logs the digest instead of
+emailing it.
 
 ## Run it locally
 
@@ -82,6 +91,7 @@ npm run digest    # actually emails it
 | `ANTHROPIC_API_KEY` | — | Optional; adds AI TL;DR |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Optional model override |
 | `DIGEST_TO` | mailbox owner | Recipient address |
-| `LOOKBACK_HOURS` | `24` | How far back to scan |
+| `LOOKBACK_HOURS` | `14` | How far back to scan (covers the overnight gap between the 5 PM and 7 AM runs) |
+| `GUARD_HOURS_CENTRAL` | — | Comma-separated Central hours (24h) a *scheduled* run is allowed to send on; e.g. `7,17` |
 | `MAX_EMAILS` | `60` | Cap on messages scanned per run |
 | `DRY_RUN` | — | `1` = print instead of send |
