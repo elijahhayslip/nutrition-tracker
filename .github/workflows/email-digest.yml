@@ -1,0 +1,38 @@
+name: Email digest
+
+on:
+  schedule:
+    # 13:00 UTC daily ≈ 7:00 AM US Central. Adjust to your timezone.
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the digest to the log instead of emailing it"
+        type: boolean
+        default: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: email-digest
+        run: npm install --no-audit --no-fund
+
+      - name: Send digest
+        working-directory: email-digest
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DIGEST_TO: ${{ vars.DIGEST_TO }}
+          LOOKBACK_HOURS: ${{ vars.LOOKBACK_HOURS || '24' }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: node digest.mjs
