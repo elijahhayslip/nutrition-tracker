@@ -1,0 +1,17 @@
+{
+  "name": "capital-email-digest",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Daily Gmail inbox digest that flags emails needing a personal reply.",
+  "scripts": {
+    "digest": "node digest.mjs",
+    "dry-run": "DRY_RUN=1 node digest.mjs"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

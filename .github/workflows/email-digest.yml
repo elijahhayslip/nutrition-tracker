@@ -1,0 +1,47 @@
+name: Email digest
+
+on:
+  schedule:
+    # Target: 7:00 AM and 5:00 PM US Central, every day.
+    # GitHub cron is UTC-only with no DST handling, so we fire at BOTH the
+    # CDT (summer, UTC-5) and CST (winter, UTC-6) candidate hours. The script
+    # checks the real Central-time hour and skips any run that isn't 07:00 or
+    # 17:00 there — so exactly two digests go out per day, year-round.
+    - cron: "0 12 * * *"   # 07:00 CDT
+    - cron: "0 13 * * *"   # 07:00 CST
+    - cron: "0 22 * * *"   # 17:00 CDT
+    - cron: "0 23 * * *"   # 17:00 CST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the digest to the log instead of emailing it"
+        type: boolean
+        default: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: email-digest
+        run: npm install --no-audit --no-fund
+
+      - name: Send digest
+        working-directory: email-digest
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DIGEST_TO: ${{ vars.DIGEST_TO }}
+          LOOKBACK_HOURS: ${{ vars.LOOKBACK_HOURS || '14' }}
+          GUARD_HOURS_CENTRAL: "7,17"
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: node digest.mjs
